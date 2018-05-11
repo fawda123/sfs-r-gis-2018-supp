@@ -18,7 +18,7 @@ library(ggrepel)
 library(plotly)
 ```
 
-We've seen how to use some of the basic plotting features in R to create static maps in the last two sub-modules.  Although static maps are still the de facto format for publications, interact with the plot data can be much more informative.  R is no longer limited to static plotting since several new package have been introduced in the last few years.  Most of these packages link R code to existing plotting libraries that were developed in other languages (e.g., JavaScript).  These are not new packages in the computing world, just new to the R universe.  They are insanely easy to use if you know just a bit of R code and they interface really well with R Markdown.  
+We've seen how to use some of the basic plotting features in R to create static maps in the last two sub-modules.  Although static maps are still the de facto format for publications, interacting with the plot data can be much more informative.  R is no longer limited to static plotting since several new package have been introduced in the last few years.  Most of these packages link R code to existing plotting libraries that were developed in other languages (e.g., JavaScript).  Many of these new packages also work well with web integration, adding a new level of experience and collaboration to your owrk.  These are not new packages in the computing world, just new to the R universe.  They are insanely easy to use if you know just a bit of R code and they interface really well with R Markdown.  
 
 We'll introduce the following packages in this submodule:
 
@@ -29,13 +29,113 @@ We'll introduce the following packages in this submodule:
 
 ### plotly
 
-The plotly library lets you easily create interactive plots in R.
- 
+The plotly library lets you easily create interactive plots in R.  We'll need the development version of plotly for our examples, so run the following code if you haven't done so already.
+
+```{r, eval = F}
+install.packages("devtool")
+library(devtools)
+install_github("ropensci/plotly")
+```
+
+Now can load the plotly library and create a simple scatterplot. 
+
 ```{r plotlyex1}
 library(plotly)
 p <- plot_ly(data = iris, x = ~Sepal.Length, y = ~Petal.Length)
 p
 ```
+
+We can see in this simple scatter plot many of the added features that are provided with plotly.  Mouse over any of the points and you can see the corresponding values on the x and y axes.  Different subsets of the data can also be emphasized with the zooming options.    
+
+A nice feature of the plotly library is the seamless integration with ggplot.  The `ggplotly` function can be appended to any ggplot object to convert it to an interactive plotly chart. If you know how to use ggplot, you can use plotly. 
+
+```{r plotlyex2}
+p <- ggplot(data = iris, aes(x = Petal.Width, fill = Species)) + 
+  geom_histogram()
+ggplotly(p)
+```
+
+Plotly is also very adept at creating three-dimensional plots, which of course requires three-dimensional data.
+
+```{r}
+plot_ly(z = ~volcano, type = 'surface')
+```
+
+In addition to being a really neat addition to general plotting, you can imagine some of the advantages that plotly might have for mapping or viewing spatial data.  Let's return to our examples from the last module to look at the area of counties in the United Sates.
+
+```{r}
+# create sf object for states, estimate and add area
+states <- st_as_sf(map('state', plot = F, fill = T))
+area <- st_area(states)
+area <- as.numeric(area) / (1000^2)
+states$area <- area
+```
+
+The development version of plotly can work directly with `sf` objects (noticing a theme here?) 
+
+```{r}
+plot_ly(states)
+```
+
+This is our basemap so let's change some of the arguments to make the map more useful.
+
+* `split` defines a grouping variable using a column in the input data, without this the color wan't map to anything and it also defines what we see on mouse-over
+* `color` identifies the column in the data to map
+* `showlegend` can toggle the legend for the splitting variable, here we don't need it
+* `alpha` sets the transparency of the polygons, we don't see the polygon borders if we set the transparency as completely opaque
+
+```{r}
+plot_ly(states, split = ~ID, color = ~ area, showlegend = F, alpha = 1)
+```
+
+We can also change the color scheme with the `colors` (note plural) argument.  We can use any of the palettes from RColorBrewer.
+
+```{r}
+plot_ly(states, split = ~ID, color = ~ area, colors = 'PiYG', showlegend = F, alpha = 1)
+```
+
+As a side note, this same code works for the counties data we used in the last sub-module.  It just takes a while render... try this code on your own. 
+
+```{r, eval = F}
+# get counties as sf object
+counties <- st_as_sf(map('county', plot = F, fill = T))
+
+# estimate area, append to counties
+area <- st_area(counties)
+area <- as.numeric(area) / (1000^2)
+counties$area <- area
+
+# make plotly
+plot_ly(counties, split = ~ID, color = ~ area, colors = 'PiYG', showlegend = F, alpha = 1)
+```
+
+Now let's put some of these javascript tools to use.  A really cool feature of plotly is the ability to link plots through interactive brushing, such as highligtings parts of one plot and seeing where they correspond on another plot.  For example, it's clear to see from our chloropleth map of states area which state is the biggest.  But what are the top ten largest states?  Can we setup the plots in a way to help us view this information?  
+
+The crosstalk package lets you link plotly objects.  This package is installed automatically when you install plotly, but you'll have to load it to use its features. The `bscols` function from the package lets you link two separate plotly objects. We'll use the area map we've already.  We can also make a histogram of area to link with the map. 
+
+Let's make the histogram first and assign to an object.  Note the use of the pipe `%>%` to chain the different functions together.  
+
+```{r}
+library(crosstalk)
+
+sts <- SharedData$new(states)
+
+state_hist <- plot_ly(sts, x = ~ area) %>%
+  add_histogram() %>%
+  highlight("plotly_selected", persistent = TRUE)
+
+state_map <- plot_ly(sts, split = ~ID, color = ~ area, colors = 'PiYG', showlegend = F, alpha = 1) %>%
+  highlight(persistent = T, dynamic = T)
+
+bscols(
+  state_hist,
+  state_map
+)
+
+```
+
+
+
 
 ### mapview
 
